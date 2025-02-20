@@ -157,7 +157,7 @@ void ShutdownAlarmMonitor::checkAlarms()
             value = SDBusPlus::getProperty<bool>(bus, sensorPath, interface,
                                                  propertyName);
         }
-        catch (const DBusServiceError& e)
+        catch (const std::exception& e)
         {
             // The sensor isn't on D-Bus anymore
             log<level::INFO>(std::format("No {} interface on {} anymore.",
@@ -394,9 +394,14 @@ void ShutdownAlarmMonitor::timerExpired(const AlarmKey& alarmKey)
     // wrapped by a compile option.
     createEventLog(alarmKey, true, value, true);
 
-    SDBusPlus::callMethod(systemdService, systemdPath, systemdMgrIface,
-                          "StartUnit", "obmc-chassis-hard-poweroff@0.target",
-                          "replace");
+    if (shutdownType == ShutdownType::hard)
+        SDBusPlus::callMethod(systemdService, systemdPath, systemdMgrIface,
+                              "StartUnit", "obmc-chassis-hard-poweroff@0.target",
+                              "replace");
+    else
+        SDBusPlus::callMethod(systemdService, systemdPath, systemdMgrIface,
+                              "StartUnit", "obmc-host-shutdown@0.target",
+                              "replace");
 
     timestamps.erase(alarmKey);
     createBmcDump();
