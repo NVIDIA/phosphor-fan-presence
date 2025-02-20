@@ -23,6 +23,7 @@
 #include <xyz/openbmc_project/Logging/Entry/server.hpp>
 
 #include <format>
+#include <sstream>
 
 namespace sensor::monitor
 {
@@ -429,6 +430,7 @@ void ShutdownAlarmMonitor::powerStateChanged(bool powerStateOn)
     }
 }
 
+// Structure: {shutdown type} shutdown timer {started/stopped/expired} for sensor {sensor} [at value {value}]. [Performing {shutdown type} shutdown.][Shutdown cancelled.]
 void ShutdownAlarmMonitor::createEventLog(
     const AlarmKey& alarmKey, bool alarmValue,
     const std::optional<double>& sensorValue, bool isPowerOffError)
@@ -438,9 +440,54 @@ void ShutdownAlarmMonitor::createEventLog(
     std::map<std::string, std::string> ad{{"SENSOR_NAME", sensorPath},
                                           {"_PID", std::to_string(getpid())}};
 
-    std::string errorName =
-        (alarmValue) ? alarmEventLogs.at(shutdownType).at(alarmType)
-                     : alarmClearEventLogs.at(shutdownType).at(alarmType);
+    std::stringstream sensorPathStream(sensorPath);
+    std::string part;
+    std::vector<std::string> sensorPathVect;
+
+    while(std::getline(sensorPathStream, part, '/')) {
+        sensorPathVect.push_back(part);
+    }
+    std::string sensorName = sensorPathVect.back();
+
+    // Tell user which kind of timer this is
+    std::string errorMessage = "";
+    switch (shutdownType){
+            case ShutdownType::hard:
+                errorMessage += "Hard shutdown timer ";
+                break;
+            case ShutdownType::soft:
+                errorMessage += "Soft shutdown timer ";
+                break;
+        }
+    // Timer expired (shutdown occurring)
+    if (alarmValue && isPowerOffError){
+        errorMessage += "expired for sensor " + sensorName;
+    }
+    // Timer started
+    else if (alarmValue){
+        errorMessage += "started for sensor " + sensorName;
+    }
+    // Timer stopped before shutdown
+    else {
+        errorMessage += "stopped for sensor " + sensorName;
+    }
+    if (sensorValue){
+        errorMessage += " at value " + std::to_string(*sensorValue);
+    }
+    errorMessage += ". ";
+    if (alarmValue && isPowerOffError){
+        switch (shutdownType){
+            case ShutdownType::hard:
+                errorMessage += "Performing hard shutdown.";
+                break;
+            case ShutdownType::soft:
+                errorMessage += "Performing soft shutdown.";
+                break;
+        }
+    }
+    else if (!alarmValue && !isPowerOffError){
+        errorMessage += " Shutdown cancelled.";
+    }
 
     // severity = Critical if a power off
     // severity = Error if alarm was asserted
@@ -469,7 +516,7 @@ void ShutdownAlarmMonitor::createEventLog(
     }
 
     SDBusPlus::callMethod(loggingService, loggingPath, loggingCreateIface,
-                          "Create", errorName, convertForMessage(severity), ad);
+                          "Create", errorMessage, convertForMessage(severity), ad);
 }
 
 std::optional<ShutdownType> ShutdownAlarmMonitor::getShutdownType(
