@@ -156,6 +156,13 @@ option(
     description: 'Milliseconds to delay the alarm before soft shutdown.',
 )
 
+option(
+    'sensor-monitor-enable-threshold-alarm-logger',
+    type: 'feature',
+    value: 'enabled',
+    description: 'Enable threshold alarm logger.',
+)
+
 # Other
 
 option(

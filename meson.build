@@ -157,6 +157,10 @@ conf.set(
     get_option('sensor-monitor-soft-shutdown-delay'),
 )
 
+if get_option('sensor-monitor-enable-threshold-alarm-logger').allowed()
+    conf.set('ENABLE_THRESHOLD_ALARM_LOGGER', '')
+endif
+
 # Presence
 conf.set('NUM_PRESENCE_LOG_ENTRIES', get_option('num-presence-log-entries'))
 conf.set_quoted('PRESENCE_YAML_FILE', get_option('presence-config'))
