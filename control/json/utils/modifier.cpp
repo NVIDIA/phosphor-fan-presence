@@ -31,11 +31,9 @@ namespace phosphor::fan::control::json
 /**
  * @brief Variant visitor to return a value of the template type specified.
  */
-template <typename T>
-struct ToTypeVisitor
+template <typename T> struct ToTypeVisitor
 {
-    template <typename U>
-    T operator()(const U& t) const
+    template <typename U> T operator()(const U& t) const
     {
         if constexpr (std::is_arithmetic_v<U> && std::is_arithmetic_v<T>)
         {

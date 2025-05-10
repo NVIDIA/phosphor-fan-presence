@@ -552,8 +552,7 @@ Action set_floor_from_median_sensor_value(T&& lowerBound, T&& upperBound,
  *     A lambda function that checks all group members are at a specified state
  * and updates the default fan floor speed.
  */
-template <typename T>
-auto update_default_floor(T&& state, uint64_t speed)
+template <typename T> auto update_default_floor(T&& state, uint64_t speed)
 {
     return [speed, state = std::forward<T>(state)](auto& zone, auto& group) {
         auto updateDefFloor = std::all_of(

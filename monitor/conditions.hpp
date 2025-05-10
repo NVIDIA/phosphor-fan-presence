@@ -20,8 +20,7 @@ using json = nlohmann::json;
  *
  * @return - The created condition function object
  */
-template <typename T>
-auto make_condition(T&& condition)
+template <typename T> auto make_condition(T&& condition)
 {
     return Condition(std::forward<T>(condition));
 }

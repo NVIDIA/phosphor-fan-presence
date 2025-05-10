@@ -40,7 +40,8 @@ class RedundancyPolicy
      */
     explicit RedundancyPolicy(const Fan& f,
                               std::unique_ptr<EEPROMDevice> eeprom) :
-        fan(f), eepromDevice(std::move(eeprom))
+        fan(f),
+        eepromDevice(std::move(eeprom))
     {}
 
     /**
@@ -86,8 +87,7 @@ class RedundancyPolicy
  * @tparam T - The type to associate with a redundancy policy.
  * @tparam Policy - An array type where the policy is stored.
  */
-template <typename T, typename Policy>
-class PolicyAccess : public T
+template <typename T, typename Policy> class PolicyAccess : public T
 {
   public:
     PolicyAccess() = default;

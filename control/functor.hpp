@@ -25,8 +25,7 @@ using namespace phosphor::logging;
  *
  * @return - The created zone handler function object
  */
-template <typename T>
-auto make_zoneHandler(T&& handler)
+template <typename T> auto make_zoneHandler(T&& handler)
 {
     return ZoneHandler(std::forward<T>(handler));
 }
@@ -38,8 +37,7 @@ auto make_zoneHandler(T&& handler)
  *
  * @return - The created trigger function object
  */
-template <typename T>
-auto make_trigger(T&& trigger)
+template <typename T> auto make_trigger(T&& trigger)
 {
     return Trigger(std::forward<T>(trigger));
 }
@@ -51,8 +49,7 @@ auto make_trigger(T&& trigger)
  *
  * @return - The created handler function object
  */
-template <typename T, typename U>
-auto make_handler(U&& handler)
+template <typename T, typename U> auto make_handler(U&& handler)
 {
     return T(std::forward<U>(handler));
 }
@@ -64,8 +61,7 @@ auto make_handler(U&& handler)
  *
  * @return - The created action function object
  */
-template <typename T>
-auto make_action(T&& action)
+template <typename T> auto make_action(T&& action)
 {
     return Action(std::forward<T>(action));
 }
@@ -79,8 +75,7 @@ auto make_action(T&& action)
  * @tparam T - The type of the property value
  * @tparam U - The type of the handler
  */
-template <typename T, typename U>
-struct Properties
+template <typename T, typename U> struct Properties
 {
     Properties() = delete;
     ~Properties() = default;
@@ -93,8 +88,8 @@ struct Properties
     {}
     Properties(const char* path, const char* intf, const char* prop,
                U&& handler) :
-        _path(path), _intf(intf), _prop(prop),
-        _handler(std::forward<U>(handler))
+        _path(path),
+        _intf(intf), _prop(prop), _handler(std::forward<U>(handler))
     {}
 
     /** @brief Run signal handler function
@@ -212,8 +207,7 @@ auto propertiesChanged(const char* path, const char* intf, const char* prop,
  * @tparam T - The type of all the properties
  * @tparam U - The type of the handler
  */
-template <typename T, typename U>
-auto getProperties(U&& handler)
+template <typename T, typename U> auto getProperties(U&& handler)
 {
     return Properties<T, U>(std::forward<U>(handler));
 }
@@ -225,8 +219,7 @@ auto getProperties(U&& handler)
  * @tparam T - The type of the property value
  * @tparam U - The type of the handler
  */
-template <typename T, typename U>
-struct InterfacesAdded
+template <typename T, typename U> struct InterfacesAdded
 {
     InterfacesAdded() = delete;
     ~InterfacesAdded() = default;
@@ -236,8 +229,8 @@ struct InterfacesAdded
     InterfacesAdded& operator=(InterfacesAdded&&) = default;
     InterfacesAdded(const char* path, const char* intf, const char* prop,
                     U&& handler) :
-        _path(path), _intf(intf), _prop(prop),
-        _handler(std::forward<U>(handler))
+        _path(path),
+        _intf(intf), _prop(prop), _handler(std::forward<U>(handler))
     {}
 
     /** @brief Run signal handler function
@@ -314,8 +307,7 @@ auto interfacesAdded(const char* path, const char* intf, const char* prop,
  *
  * @tparam U - The type of the handler
  */
-template <typename U>
-struct InterfacesRemoved
+template <typename U> struct InterfacesRemoved
 {
     InterfacesRemoved() = delete;
     ~InterfacesRemoved() = default;
@@ -386,8 +378,7 @@ auto interfacesRemoved(const char* path, const char* intf, U&& handler)
  *
  * @tparam U - The type of the handler
  */
-template <typename U>
-struct NameOwner
+template <typename U> struct NameOwner
 {
     NameOwner() = delete;
     ~NameOwner() = default;
@@ -472,8 +463,7 @@ struct NameOwner
  *
  * @return - The NameOwnerChanged signal struct
  */
-template <typename U>
-auto nameOwnerChanged(U&& handler)
+template <typename U> auto nameOwnerChanged(U&& handler)
 {
     return NameOwner<U>(std::forward<U>(handler));
 }
@@ -487,8 +477,7 @@ auto nameOwnerChanged(U&& handler)
  *
  * @return - The NameOwnerChanged signal struct
  */
-template <typename U>
-auto nameHasOwner(U&& handler)
+template <typename U> auto nameHasOwner(U&& handler)
 {
     return NameOwner<U>(std::forward<U>(handler));
 }

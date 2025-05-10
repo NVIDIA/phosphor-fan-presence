@@ -89,7 +89,8 @@ using namespace sdbusplus::bus::match;
 ShutdownAlarmMonitor::ShutdownAlarmMonitor(
     sdbusplus::bus_t& bus, sdeventplus::Event& event,
     std::shared_ptr<PowerState> powerState) :
-    bus(bus), event(event), _powerState(std::move(powerState)),
+    bus(bus),
+    event(event), _powerState(std::move(powerState)),
     hardShutdownMatch(bus,
                       "type='signal',member='PropertiesChanged',"
                       "path_namespace='/xyz/openbmc_project/sensors',"
@@ -397,8 +398,8 @@ void ShutdownAlarmMonitor::timerExpired(const AlarmKey& alarmKey)
 
     if (shutdownType == ShutdownType::hard)
         SDBusPlus::callMethod(systemdService, systemdPath, systemdMgrIface,
-                              "StartUnit", "obmc-chassis-hard-poweroff@0.target",
-                              "replace");
+                              "StartUnit",
+                              "obmc-chassis-hard-poweroff@0.target", "replace");
     else
         SDBusPlus::callMethod(systemdService, systemdPath, systemdMgrIface,
                               "StartUnit", "obmc-host-shutdown@0.target",
@@ -430,7 +431,9 @@ void ShutdownAlarmMonitor::powerStateChanged(bool powerStateOn)
     }
 }
 
-// Structure: {shutdown type} shutdown timer {started/stopped/expired} for sensor {sensor} [at value {value}]. [Performing {shutdown type} shutdown.][Shutdown cancelled.]
+// Structure: {shutdown type} shutdown timer {started/stopped/expired} for
+// sensor {sensor} [at value {value}]. [Performing {shutdown type}
+// shutdown.][Shutdown cancelled.]
 void ShutdownAlarmMonitor::createEventLog(
     const AlarmKey& alarmKey, bool alarmValue,
     const std::optional<double>& sensorValue, bool isPowerOffError)
@@ -444,39 +447,47 @@ void ShutdownAlarmMonitor::createEventLog(
     std::string part;
     std::vector<std::string> sensorPathVect;
 
-    while(std::getline(sensorPathStream, part, '/')) {
+    while (std::getline(sensorPathStream, part, '/'))
+    {
         sensorPathVect.push_back(part);
     }
     std::string sensorName = sensorPathVect.back();
 
     // Tell user which kind of timer this is
     std::string errorMessage = "";
-    switch (shutdownType){
-            case ShutdownType::hard:
-                errorMessage += "Hard shutdown timer ";
-                break;
-            case ShutdownType::soft:
-                errorMessage += "Soft shutdown timer ";
-                break;
-        }
+    switch (shutdownType)
+    {
+        case ShutdownType::hard:
+            errorMessage += "Hard shutdown timer ";
+            break;
+        case ShutdownType::soft:
+            errorMessage += "Soft shutdown timer ";
+            break;
+    }
     // Timer expired (shutdown occurring)
-    if (alarmValue && isPowerOffError){
+    if (alarmValue && isPowerOffError)
+    {
         errorMessage += "expired for sensor " + sensorName;
     }
     // Timer started
-    else if (alarmValue){
+    else if (alarmValue)
+    {
         errorMessage += "started for sensor " + sensorName;
     }
     // Timer stopped before shutdown
-    else {
+    else
+    {
         errorMessage += "stopped for sensor " + sensorName;
     }
-    if (sensorValue){
+    if (sensorValue)
+    {
         errorMessage += " at value " + std::to_string(*sensorValue);
     }
     errorMessage += ". ";
-    if (alarmValue && isPowerOffError){
-        switch (shutdownType){
+    if (alarmValue && isPowerOffError)
+    {
+        switch (shutdownType)
+        {
             case ShutdownType::hard:
                 errorMessage += "Performing hard shutdown.";
                 break;
@@ -485,7 +496,8 @@ void ShutdownAlarmMonitor::createEventLog(
                 break;
         }
     }
-    else if (!alarmValue && !isPowerOffError){
+    else if (!alarmValue && !isPowerOffError)
+    {
         errorMessage += " Shutdown cancelled.";
     }
 
@@ -516,7 +528,8 @@ void ShutdownAlarmMonitor::createEventLog(
     }
 
     SDBusPlus::callMethod(loggingService, loggingPath, loggingCreateIface,
-                          "Create", errorMessage, convertForMessage(severity), ad);
+                          "Create", errorMessage, convertForMessage(severity),
+                          ad);
 }
 
 std::optional<ShutdownType> ShutdownAlarmMonitor::getShutdownType(

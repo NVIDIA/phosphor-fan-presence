@@ -288,8 +288,7 @@ class ActionFactory
      *
      * @return The action was registered, otherwise an exception is thrown.
      */
-    template <typename T>
-    static bool regAction(const std::string& name)
+    template <typename T> static bool regAction(const std::string& name)
     {
         auto it = actions.find(name);
         if (it == actions.end())
@@ -359,8 +358,7 @@ class ActionFactory
  * Base action registration class that is extended by an action object so
  * that action is registered and available for use.
  */
-template <typename T>
-class ActionRegister
+template <typename T> class ActionRegister
 {
   public:
     ActionRegister(const ActionRegister&) = delete;
