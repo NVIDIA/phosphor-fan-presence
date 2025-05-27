@@ -38,7 +38,9 @@ int main(int, char*[])
 
     ShutdownAlarmMonitor shutdownMonitor{bus, event, powerState};
 
+#ifdef ENABLE_THRESHOLD_ALARM_LOGGER
     ThresholdAlarmLogger logger{bus, event, powerState};
+#endif
 
     return event.loop();
 }

@@ -48,8 +48,7 @@ auto setZoneProperty(const char* intf, const char* prop, T (Zone::*func)(T),
  * @return Lambda function
  *     A lambda function to set/update the property value
  */
-template <typename T>
-auto setProperty()
+template <typename T> auto setProperty()
 {
     return [](auto& zone, auto& path, auto& intf, auto& prop, T&& arg) {
         zone.setPropertyValue(path, intf, prop, std::forward<T>(arg));

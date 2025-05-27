@@ -1,18 +1,19 @@
-## This file is a template, the comment below is emitted into the generated file
+##This file is a template, the comment below is emitted into the generated file
 /* This is an auto generated file. Do not edit. */
 #pragma once
 
-#include <array>
-#include <memory>
-#include <optional>
-#include <string>
 #include "anyof.hpp"
 #include "fallback.hpp"
 #include "fan.hpp"
 #include "gpio.hpp"
 #include "tach.hpp"
 
-using namespace std::string_literals;
+#include <array>
+#include <memory>
+#include <optional>
+#include <string>
+
+    using namespace std::string_literals;
 
 namespace phosphor
 {
@@ -25,7 +26,8 @@ struct ConfigPolicy;
 
 struct ConfigSensors
 {
-    using Sensors = std::array<std::unique_ptr<PresenceSensor>, ${len(sensors)}>;
+    using Sensors =
+        std::array<std::unique_ptr<PresenceSensor>, ${len(sensors)}>;
 
     static auto& get()
     {
@@ -63,7 +65,8 @@ struct ConfigFans
 
 struct ConfigPolicy
 {
-    using Policies = std::array<std::unique_ptr<RedundancyPolicy>, ${len(policies)}>;
+    using Policies =
+        std::array<std::unique_ptr<RedundancyPolicy>, ${len(policies)}>;
 
     static auto& get()
     {
