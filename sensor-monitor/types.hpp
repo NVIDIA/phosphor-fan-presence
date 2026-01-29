@@ -17,7 +17,8 @@ namespace sensor::monitor
 enum class ShutdownType
 {
     hard,
-    soft
+    soft,
+    leak
 };
 
 /**

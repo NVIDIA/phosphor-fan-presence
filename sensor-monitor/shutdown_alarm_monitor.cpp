@@ -34,7 +34,8 @@ namespace fs = std::filesystem;
 
 const std::map<ShutdownType, std::string> shutdownInterfaces{
     {ShutdownType::hard, "xyz.openbmc_project.Sensor.Threshold.HardShutdown"},
-    {ShutdownType::soft, "xyz.openbmc_project.Sensor.Threshold.SoftShutdown"}};
+    {ShutdownType::soft, "xyz.openbmc_project.Sensor.Threshold.SoftShutdown"},
+    {ShutdownType::leak, "xyz.openbmc_project.State.LeakDetector"}};
 
 const std::map<ShutdownType, std::map<AlarmType, std::string>> alarmProperties{
     {ShutdownType::hard,
@@ -42,13 +43,15 @@ const std::map<ShutdownType, std::map<AlarmType, std::string>> alarmProperties{
       {AlarmType::high, "HardShutdownAlarmHigh"}}},
     {ShutdownType::soft,
      {{AlarmType::low, "SoftShutdownAlarmLow"},
-      {AlarmType::high, "SoftShutdownAlarmHigh"}}}};
+      {AlarmType::high, "SoftShutdownAlarmHigh"}}},
+    {ShutdownType::leak, {{AlarmType::high, "DetectorState"}}}};
 
 const std::map<ShutdownType, std::chrono::milliseconds> shutdownDelays{
     {ShutdownType::hard,
      std::chrono::milliseconds{SHUTDOWN_ALARM_HARD_SHUTDOWN_DELAY_MS}},
     {ShutdownType::soft,
-     std::chrono::milliseconds{SHUTDOWN_ALARM_SOFT_SHUTDOWN_DELAY_MS}}};
+     std::chrono::milliseconds{SHUTDOWN_ALARM_SOFT_SHUTDOWN_DELAY_MS}},
+    {ShutdownType::leak, std::chrono::milliseconds{0}}};
 
 const std::map<ShutdownType, std::map<AlarmType, std::string>> alarmEventLogs{
     {ShutdownType::hard,
@@ -60,7 +63,10 @@ const std::map<ShutdownType, std::map<AlarmType, std::string>> alarmEventLogs{
      {{AlarmType::high,
        "xyz.openbmc_project.Sensor.Threshold.Error.SoftShutdownAlarmHigh"},
       {AlarmType::low, "xyz.openbmc_project.Sensor.Threshold.Error."
-                       "SoftShutdownAlarmLow"}}}};
+                       "SoftShutdownAlarmLow"}}},
+    {ShutdownType::leak,
+     {{AlarmType::high, "xyz.openbmc_project.State.LeakDetector.Error."
+                        "LeakDetectedCritical"}}}};
 
 const std::map<ShutdownType, std::map<AlarmType, std::string>>
     alarmClearEventLogs{
@@ -73,13 +79,23 @@ const std::map<ShutdownType, std::map<AlarmType, std::string>>
          {{AlarmType::high, "xyz.openbmc_project.Sensor.Threshold.Error."
                             "SoftShutdownAlarmHighClear"},
           {AlarmType::low, "xyz.openbmc_project.Sensor.Threshold.Error."
-                           "SoftShutdownAlarmLowClear"}}}};
+                           "SoftShutdownAlarmLowClear"}}},
+        {ShutdownType::leak,
+         {{AlarmType::high, "xyz.openbmc_project.State.LeakDetector.Error."
+                            "LeakDetectedNormal"}}}};
 
 constexpr auto systemdService = "org.freedesktop.systemd1";
 constexpr auto systemdPath = "/org/freedesktop/systemd1";
 constexpr auto systemdMgrIface = "org.freedesktop.systemd1.Manager";
 constexpr auto valueInterface = "xyz.openbmc_project.Sensor.Value";
 constexpr auto valueProperty = "Value";
+constexpr auto leakConfigInterface =
+    "xyz.openbmc_project.Configuration.LeakDetectionPolicy";
+constexpr auto leakDetectorNameProp = "LeakDetectorName";
+constexpr auto leakCriticalReactionProp = "CriticalReactionType";
+constexpr auto leakReactionDelayProp = "ReactionDelaySeconds";
+constexpr auto leakCriticalState =
+    "xyz.openbmc_project.State.LeakDetector.DetectorStateEnum.Critical";
 const auto loggingService = "xyz.openbmc_project.Logging";
 const auto loggingPath = "/xyz/openbmc_project/logging";
 const auto loggingCreateIface = "xyz.openbmc_project.Logging.Create";
@@ -102,6 +118,13 @@ ShutdownAlarmMonitor::ShutdownAlarmMonitor(
                       "path_namespace='/xyz/openbmc_project/sensors',"
                       "arg0='" +
                           shutdownInterfaces.at(ShutdownType::soft) + "'",
+                      std::bind(&ShutdownAlarmMonitor::propertiesChanged, this,
+                                std::placeholders::_1)),
+    leakDetectorMatch(bus,
+                      "type='signal',member='PropertiesChanged',"
+                      "path_namespace='/xyz/openbmc_project/state',"
+                      "arg0='" +
+                          shutdownInterfaces.at(ShutdownType::leak) + "'",
                       std::bind(&ShutdownAlarmMonitor::propertiesChanged, this,
                                 std::placeholders::_1))
 {
@@ -138,8 +161,11 @@ void ShutdownAlarmMonitor::findAlarms()
             [this, shutdownType2](const auto& path) {
                 alarms.emplace(AlarmKey{path, shutdownType2, AlarmType::high},
                                nullptr);
-                alarms.emplace(AlarmKey{path, shutdownType2, AlarmType::low},
-                               nullptr);
+                if (shutdownType2 != ShutdownType::leak)
+                {
+                    alarms.emplace(
+                        AlarmKey{path, shutdownType2, AlarmType::low}, nullptr);
+                }
             });
     }
 }
@@ -151,12 +177,24 @@ void ShutdownAlarmMonitor::checkAlarms()
         const auto& [sensorPath, shutdownType, alarmType] = alarmKey;
         const auto& interface = shutdownInterfaces.at(shutdownType);
         auto propertyName = alarmProperties.at(shutdownType).at(alarmType);
-        bool value;
+        bool value = false;
 
         try
         {
-            value = SDBusPlus::getProperty<bool>(bus, sensorPath, interface,
-                                                 propertyName);
+            if (shutdownType == ShutdownType::leak)
+            {
+                auto state = SDBusPlus::getProperty<std::string>(
+                    bus, sensorPath, interface, propertyName);
+                if (state == leakCriticalState)
+                {
+                    value = true;
+                }
+            }
+            else
+            {
+                value = SDBusPlus::getProperty<bool>(bus, sensorPath, interface,
+                                                     propertyName);
+            }
         }
         catch (const std::exception& e)
         {
@@ -173,7 +211,7 @@ void ShutdownAlarmMonitor::checkAlarms()
 
 void ShutdownAlarmMonitor::propertiesChanged(sdbusplus::message_t& message)
 {
-    std::map<std::string, std::variant<bool>> properties;
+    std::map<std::string, std::variant<bool, std::string>> properties;
     std::string interface;
 
     if (!_powerState->isPowerOn())
@@ -190,6 +228,25 @@ void ShutdownAlarmMonitor::propertiesChanged(sdbusplus::message_t& message)
     }
 
     std::string sensorPath = message.get_path();
+
+    if (*type == ShutdownType::leak)
+    {
+        const auto& alarmName = alarmProperties.at(*type).at(AlarmType::high);
+        if (properties.count(alarmName) > 0)
+        {
+            AlarmKey alarmKey{sensorPath, *type, AlarmType::high};
+            auto alarm = alarms.find(alarmKey);
+            if (alarm == alarms.end())
+            {
+                alarms.emplace(alarmKey, nullptr);
+            }
+            auto state = std::get<std::string>(properties.at(alarmName));
+            bool value = (state == leakCriticalState);
+
+            checkAlarm(value, alarmKey);
+        }
+        return;
+    }
 
     const auto& lowAlarmName = alarmProperties.at(*type).at(AlarmType::low);
     if (properties.count(lowAlarmName) > 0)
@@ -249,23 +306,41 @@ void ShutdownAlarmMonitor::startTimer(const AlarmKey& alarmKey)
     std::chrono::milliseconds shutdownDelay{shutdownDelays.at(shutdownType)};
     std::optional<double> value;
 
+    if (shutdownType == ShutdownType::leak)
+    {
+        auto [reaction, delay] = getLeakConfig(sensorPath);
+        log<level::INFO>(
+            std::format("Leak detector {} config: reaction={}, delay={}",
+                        sensorPath, reaction, delay)
+                .c_str());
+
+        if (reaction != "ForceOff")
+        {
+            return;
+        }
+        shutdownDelay = std::chrono::seconds(delay);
+    }
+
     auto alarm = alarms.find(alarmKey);
     if (alarm == alarms.end())
     {
         throw std::runtime_error("Couldn't find alarm inside startTimer");
     }
 
-    try
+    if (shutdownType != ShutdownType::leak)
     {
-        value = SDBusPlus::getProperty<double>(bus, sensorPath, valueInterface,
-                                               valueProperty);
-    }
-    catch (const DBusServiceError& e)
-    {
-        // If the sensor was just added, the Value interface for it may
-        // not be in the mapper yet.  This could only happen if the sensor
-        // application was started with power up and the value exceeded the
-        // threshold immediately.
+        try
+        {
+            value = SDBusPlus::getProperty<double>(
+                bus, sensorPath, valueInterface, valueProperty);
+        }
+        catch (const DBusServiceError& e)
+        {
+            // If the sensor was just added, the Value interface for it may
+            // not be in the mapper yet.  This could only happen if the sensor
+            // application was started with power up and the value exceeded the
+            // threshold immediately.
+        }
     }
 
     createEventLog(alarmKey, true, value);
@@ -312,10 +387,21 @@ void ShutdownAlarmMonitor::startTimer(const AlarmKey& alarmKey)
         }
     }
 
-    log<level::INFO>(
-        std::format("Starting {}ms {} shutdown timer due to sensor {} value {}",
-                    shutdownDelay.count(), propertyName, sensorPath, *value)
-            .c_str());
+    if (value)
+    {
+        log<level::INFO>(
+            std::format(
+                "Starting {}ms {} shutdown timer due to sensor {} value {}",
+                shutdownDelay.count(), propertyName, sensorPath, *value)
+                .c_str());
+    }
+    else
+    {
+        log<level::INFO>(
+            std::format("Starting {}ms {} shutdown timer due to sensor {}",
+                        shutdownDelay.count(), propertyName, sensorPath)
+                .c_str());
+    }
 
     auto& timer = alarm->second;
 
@@ -335,8 +421,12 @@ void ShutdownAlarmMonitor::stopTimer(const AlarmKey& alarmKey)
     const auto& [sensorPath, shutdownType, alarmType] = alarmKey;
     const auto& propertyName = alarmProperties.at(shutdownType).at(alarmType);
 
-    auto value = SDBusPlus::getProperty<double>(bus, sensorPath, valueInterface,
-                                                valueProperty);
+    std::optional<double> value;
+    if (shutdownType != ShutdownType::leak)
+    {
+        value = SDBusPlus::getProperty<double>(bus, sensorPath, valueInterface,
+                                               valueProperty);
+    }
 
     auto alarm = alarms.find(alarmKey);
     if (alarm == alarms.end())
@@ -346,10 +436,19 @@ void ShutdownAlarmMonitor::stopTimer(const AlarmKey& alarmKey)
 
     createEventLog(alarmKey, false, value);
 
-    log<level::INFO>(
-        std::format("Stopping {} shutdown timer due to sensor {} value {}",
-                    propertyName, sensorPath, value)
-            .c_str());
+    if (value)
+    {
+        log<level::INFO>(
+            std::format("Stopping {} shutdown timer due to sensor {} value {}",
+                        propertyName, sensorPath, *value)
+                .c_str());
+    }
+    else
+    {
+        log<level::INFO>(std::format("Stopping {} shutdown timer for sensor {}",
+                                     propertyName, sensorPath)
+                             .c_str());
+    }
 
     auto& timer = alarm->second;
     timer->setEnabled(false);
@@ -382,8 +481,12 @@ void ShutdownAlarmMonitor::timerExpired(const AlarmKey& alarmKey)
     const auto& [sensorPath, shutdownType, alarmType] = alarmKey;
     const auto& propertyName = alarmProperties.at(shutdownType).at(alarmType);
 
-    auto value = SDBusPlus::getProperty<double>(bus, sensorPath, valueInterface,
-                                                valueProperty);
+    std::optional<double> value;
+    if (shutdownType != ShutdownType::leak)
+    {
+        value = SDBusPlus::getProperty<double>(bus, sensorPath, valueInterface,
+                                               valueProperty);
+    }
 
     log<level::ERR>(
         std::format(
@@ -395,7 +498,8 @@ void ShutdownAlarmMonitor::timerExpired(const AlarmKey& alarmKey)
     // wrapped by a compile option.
     createEventLog(alarmKey, true, value, true);
 
-    if (shutdownType == ShutdownType::hard)
+    if (shutdownType == ShutdownType::hard ||
+        shutdownType == ShutdownType::leak)
         SDBusPlus::callMethod(systemdService, systemdPath, systemdMgrIface,
                               "StartUnit",
                               "obmc-chassis-hard-poweroff@0.target", "replace");
@@ -462,6 +566,9 @@ void ShutdownAlarmMonitor::createEventLog(
         case ShutdownType::soft:
             errorMessage += "Soft shutdown timer ";
             break;
+        case ShutdownType::leak:
+            errorMessage += "Leak detector shutdown timer ";
+            break;
     }
     // Timer expired (shutdown occurring)
     if (alarmValue && isPowerOffError)
@@ -492,6 +599,9 @@ void ShutdownAlarmMonitor::createEventLog(
                 break;
             case ShutdownType::soft:
                 errorMessage += "Performing soft shutdown.";
+                break;
+            case ShutdownType::leak:
+                errorMessage += "Performing leak detector shutdown.";
                 break;
         }
     }
@@ -544,6 +654,82 @@ std::optional<ShutdownType> ShutdownAlarmMonitor::getShutdownType(
     }
 
     return it->first;
+}
+
+std::pair<std::string, uint64_t> ShutdownAlarmMonitor::getLeakConfig(
+    const std::string& detectorPath)
+{
+    std::string path = detectorPath;
+    std::string reaction;
+    std::string foundInterface;
+
+    // Try to find it in the subtree
+    try
+    {
+        auto paths = SDBusPlus::getSubTreePathsRaw(
+            bus, "/xyz/openbmc_project/inventory", leakConfigInterface, 0);
+
+        // Find the path that ends with the sensor name
+        std::string sensorName = std::filesystem::path(detectorPath).filename();
+
+        auto it = std::find_if(
+            paths.begin(), paths.end(), [&sensorName, this](const auto& p) {
+                try
+                {
+                    auto name = SDBusPlus::getProperty<std::string>(
+                        bus, p, leakConfigInterface, leakDetectorNameProp);
+                    return name == sensorName;
+                }
+                catch (...)
+                {
+                    return false;
+                }
+            });
+
+        if (it != paths.end())
+        {
+            path = *it;
+            reaction = SDBusPlus::getProperty<std::string>(
+                bus, path, leakConfigInterface, leakCriticalReactionProp);
+            log<level::INFO>(
+                std::format("Found leak config for {} at {} on interface {}",
+                            detectorPath, path, leakConfigInterface)
+                    .c_str());
+        }
+    }
+    catch (...)
+    {
+        log<level::ERR>(
+            std::format(
+                "Failed to get valid leak detector path for {} from interface {}",
+                detectorPath, leakConfigInterface)
+                .c_str());
+    }
+
+    if (reaction.empty())
+    {
+        return {"", 0};
+    }
+
+    uint64_t delay = 0;
+    try
+    {
+        double d = SDBusPlus::getProperty<double>(
+            bus, path, leakConfigInterface, leakReactionDelayProp);
+        delay = static_cast<uint64_t>(d);
+    }
+    catch (...)
+    {
+        try
+        {
+            delay = SDBusPlus::getProperty<uint64_t>(
+                bus, path, leakConfigInterface, leakReactionDelayProp);
+        }
+        catch (...)
+        {}
+    }
+
+    return {reaction, delay};
 }
 
 } // namespace sensor::monitor

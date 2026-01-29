@@ -167,6 +167,16 @@ class ShutdownAlarmMonitor
     void createBmcDump() const;
 
     /**
+     * @brief Looks up the leak detection configuration for a sensor.
+     *
+     * @param[in] sensorPath - The sensor D-Bus path
+     *
+     * @return A pair of {reaction type, reaction delay}
+     */
+    std::pair<std::string, uint64_t> getLeakConfig(
+        const std::string& sensorPath);
+
+    /**
      * @brief The sdbusplus bus object
      */
     sdbusplus::bus_t& bus;
@@ -192,6 +202,12 @@ class ShutdownAlarmMonitor
      *        interface.
      */
     sdbusplus::bus::match_t softShutdownMatch;
+
+    /**
+     * @brief The match for properties changing on the LeakDetector
+     *        interface.
+     */
+    sdbusplus::bus::match_t leakDetectorMatch;
 
     /**
      * @brief The map of alarms.
