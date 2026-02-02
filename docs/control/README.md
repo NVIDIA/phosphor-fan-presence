@@ -271,4 +271,4 @@ To confirm which config files were loaded, use the following command on the BMC:
 ## Debug
 
 Fan control maintains internal data structures that can be be dumped at runtime.
-Details [here](debug.md).
+Details are available in the [debugging documentation](debug.md).
