@@ -84,9 +84,6 @@ const std::map<ShutdownType, std::map<AlarmType, std::string>>
          {{AlarmType::high, "xyz.openbmc_project.State.LeakDetector.Error."
                             "LeakDetectedNormal"}}}};
 
-constexpr auto systemdService = "org.freedesktop.systemd1";
-constexpr auto systemdPath = "/org/freedesktop/systemd1";
-constexpr auto systemdMgrIface = "org.freedesktop.systemd1.Manager";
 constexpr auto valueInterface = "xyz.openbmc_project.Sensor.Value";
 constexpr auto valueProperty = "Value";
 constexpr auto leakConfigInterface =
@@ -96,6 +93,19 @@ constexpr auto leakCriticalReactionProp = "CriticalReactionType";
 constexpr auto leakReactionDelayProp = "ReactionDelaySeconds";
 constexpr auto leakCriticalState =
     "xyz.openbmc_project.State.LeakDetector.DetectorStateEnum.Critical";
+constexpr auto chassisStateService = "xyz.openbmc_project.State.Chassis";
+constexpr auto chassisStatePath = "/xyz/openbmc_project/state/chassis0";
+constexpr auto chassisStateInterface = "xyz.openbmc_project.State.Chassis";
+constexpr auto chassisStateTransitionProp = "RequestedPowerTransition";
+constexpr auto chassisStateOff =
+    "xyz.openbmc_project.State.Chassis.Transition.Off";
+
+constexpr auto hostStateService = "xyz.openbmc_project.State.Host";
+constexpr auto hostStatePath = "/xyz/openbmc_project/state/host0";
+constexpr auto hostStateInterface = "xyz.openbmc_project.State.Host";
+constexpr auto hostStateTransitionProp = "RequestedHostTransition";
+constexpr auto hostStateOff = "xyz.openbmc_project.State.Host.Transition.Off";
+
 const auto loggingService = "xyz.openbmc_project.Logging";
 const auto loggingPath = "/xyz/openbmc_project/logging";
 const auto loggingCreateIface = "xyz.openbmc_project.Logging.Create";
@@ -500,13 +510,36 @@ void ShutdownAlarmMonitor::timerExpired(const AlarmKey& alarmKey)
 
     if (shutdownType == ShutdownType::hard ||
         shutdownType == ShutdownType::leak)
-        SDBusPlus::callMethod(systemdService, systemdPath, systemdMgrIface,
-                              "StartUnit",
-                              "obmc-chassis-hard-poweroff@0.target", "replace");
+    {
+        try
+        {
+            SDBusPlus::setProperty(bus, chassisStateService, chassisStatePath,
+                                   chassisStateInterface,
+                                   chassisStateTransitionProp,
+                                   std::string(chassisStateOff));
+        }
+        catch (const std::exception& e)
+        {
+            log<level::ERR>(
+                std::format("Failed to trigger hard shutdown: {}", e.what())
+                    .c_str());
+        }
+    }
     else
-        SDBusPlus::callMethod(systemdService, systemdPath, systemdMgrIface,
-                              "StartUnit", "obmc-host-shutdown@0.target",
-                              "replace");
+    {
+        try
+        {
+            SDBusPlus::setProperty(bus, hostStateService, hostStatePath,
+                                   hostStateInterface, hostStateTransitionProp,
+                                   std::string(hostStateOff));
+        }
+        catch (const std::exception& e)
+        {
+            log<level::ERR>(
+                std::format("Failed to trigger soft shutdown: {}", e.what())
+                    .c_str());
+        }
+    }
 
     timestamps.erase(alarmKey);
     createBmcDump();
