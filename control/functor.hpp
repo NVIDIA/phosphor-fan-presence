@@ -243,7 +243,7 @@ template <typename T, typename U> struct InterfacesAdded
     {
         if (msg)
         {
-            sdbusplus::message::object_path op;
+            sdbusplus::object_path op;
 
             msg.read(op);
             if (static_cast<const std::string&>(op) != _path)
@@ -330,7 +330,7 @@ template <typename U> struct InterfacesRemoved
         if (msg)
         {
             std::vector<std::string> intfs;
-            sdbusplus::message::object_path op;
+            sdbusplus::object_path op;
 
             msg.read(op);
             if (static_cast<const std::string&>(op) != _path)
